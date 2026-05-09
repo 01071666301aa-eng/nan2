@@ -1,16 +1,17 @@
 import streamlit as st
 from groq import Groq
+import google.generativeai as genai
 import os
 import re
 import hashlib
 import requests
-import json
 
 # ── 1. 페이지 설정 ───────────────────────────────────────────
 st.set_page_config(page_title="이서 프로젝트", page_icon="🌙", layout="centered")
 
-# ── 2. API 클라이언트 & Supabase 설정 ────────────────────────
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+# ── 2. API 클라이언트 설정 ───────────────────────────────────
+groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -60,7 +61,47 @@ MAX_TURNS = 10
 def get_trimmed_messages():
     return st.session_state.messages[-(MAX_TURNS * 2):]
 
-# ── 7. 로그인 화면 ───────────────────────────────────────────
+# ── 7. AI 응답 함수 (Groq → Gemini 자동 폴백) ───────────────
+def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
+    # 1순위: Groq
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "system", "content": system_prompt}] + api_messages,
+            temperature=0.75,
+            top_p=0.9,
+            max_tokens=600,
+        )
+        return completion.choices[0].message.content, "Groq"
+
+    except Exception as e:
+        if "429" in str(e) or "rate_limit" in str(e).lower():
+            # 2순위: Gemini로 자동 전환
+            try:
+                gemini_history = []
+                for msg in api_messages[:-1]:
+                    role = "user" if msg["role"] == "user" else "model"
+                    gemini_history.append({
+                        "role": role,
+                        "parts": [msg["content"]]
+                    })
+
+                last_user_msg = api_messages[-1]["content"]
+
+                gemini_model = genai.GenerativeModel(
+                    "gemini-2.0-flash",
+                    system_instruction=system_prompt
+                )
+                chat = gemini_model.start_chat(history=gemini_history)
+                response = chat.send_message(last_user_msg)
+                return response.text, "Gemini"
+
+            except Exception as gemini_err:
+                raise Exception(f"Groq·Gemini 모두 실패: {gemini_err}")
+        else:
+            raise e
+
+# ── 8. 로그인 화면 ───────────────────────────────────────────
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 
@@ -80,14 +121,12 @@ if st.session_state.user_id is None:
         reset = st.button("🗑 처음부터 다시", use_container_width=True)
 
     if (start or reset) and my_name and password and char_name:
-        # 이름+비번 해시로 고유 user_id 생성
         user_id = hashlib.sha256(f"{my_name}{password}".encode()).hexdigest()[:16]
-        st.session_state.user_id  = user_id
-        st.session_state.my_name  = my_name
+        st.session_state.user_id   = user_id
+        st.session_state.my_name   = my_name
         st.session_state.char_name = char_name
 
         if reset:
-            # 처음부터: DB 데이터 삭제 후 초기화
             requests.delete(
                 f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}",
                 headers=HEADERS
@@ -102,7 +141,6 @@ if st.session_state.user_id is None:
             st.session_state.turn_count = saved["turn_count"]
             st.session_state.char_name  = saved["char_name"]
         else:
-            # 첫 시작 초기화
             opening = (
                 f"창밖을 바라보던 {char_name}가 고개를 돌려 {my_name}을 빤히 쳐다본다. "
                 f"무표정한 얼굴 너머로 무슨 생각을 하는지 알 수 없지만, "
@@ -123,7 +161,7 @@ if st.session_state.user_id is None:
 
     st.stop()
 
-# ── 8. 시스템 프롬프트 ───────────────────────────────────────
+# ── 9. 시스템 프롬프트 ───────────────────────────────────────
 char = st.session_state.char_name
 my   = st.session_state.my_name
 
@@ -132,9 +170,9 @@ SYSTEM_PROMPT = f"""\
 캐릭터 이름은 '{char}'이며, 성격과 말투는 'Re:제로'의 '람'을 완벽히 모방한다.
 
 ■ 출력 형식 (반드시 이 순서·이 형식만 사용)
-1. 상황 묘사   : 전지적 작가 시점, 소설체(~다/~했다). {char}의 표정·심리를 섬세하게 묘사. 대사 전 빈 줄 삽입.
+1. 상황 묘사     : 전지적 작가 시점, 소설체(~다/~했다). {char}의 표정·심리를 섬세하게 묘사. 대사 전 빈 줄 삽입.
 2. {char}의 대사 : "{char}: ' '" 형식. 차갑고 독설적인 한국어 반말.
-3. 게임 정보   : 마지막 줄에 [현재 호감도: 숫자] 만 단독 표기.
+3. 게임 정보     : 마지막 줄에 [현재 호감도: 숫자] 만 단독 표기.
 
 ■ 캐릭터 규칙
 - 상대방 호칭: '{my}' 또는 '당신' (깔보는 어투)
@@ -153,10 +191,9 @@ SYSTEM_PROMPT = f"""\
 - 오직 완벽한 한국어만 사용
 """
 
-# ── 9. 메인 UI ───────────────────────────────────────────────
+# ── 10. 메인 UI ──────────────────────────────────────────────
 st.title(f"🌙 {char} 프로젝트")
 
-# 호감도 표시
 affection = st.session_state.affection
 label = (
     "💗 연인"  if affection >= 90 else
@@ -167,7 +204,6 @@ label = (
 st.caption(f"호감도 {affection}/100  {label}")
 st.progress(affection / 100)
 
-# 로그아웃 버튼
 if st.button("← 로그아웃", key="logout"):
     for key in ["user_id", "my_name", "char_name", "messages", "affection", "turn_count"]:
         st.session_state.pop(key, None)
@@ -175,7 +211,7 @@ if st.button("← 로그아웃", key="logout"):
 
 st.divider()
 
-# ── 10. 대화 출력 ────────────────────────────────────────────
+# ── 11. 대화 출력 ────────────────────────────────────────────
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         with st.chat_message("user", avatar=user_avatar):
@@ -184,7 +220,7 @@ for msg in st.session_state.messages:
         with st.chat_message("assistant", avatar=iseo_avatar):
             st.markdown(msg["content"])
 
-# ── 11. 입력 처리 ────────────────────────────────────────────
+# ── 12. 입력 처리 ────────────────────────────────────────────
 if prompt := st.chat_input(f"{char}에게 할 말을 입력하세요..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=user_avatar):
@@ -193,20 +229,15 @@ if prompt := st.chat_input(f"{char}에게 할 말을 입력하세요..."):
     with st.chat_message("assistant", avatar=iseo_avatar):
         with st.spinner(f"{char}가 대답을 고르는 중..."):
             try:
-                api_messages = [{"role": "system", "content": SYSTEM_PROMPT}] \
-                             + get_trimmed_messages()
-
-                completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=api_messages,
-                    temperature=0.75,
-                    top_p=0.9,
-                    max_tokens=600,
+                response, used_model = get_ai_response(
+                    SYSTEM_PROMPT,
+                    get_trimmed_messages()
                 )
-                response = completion.choices[0].message.content
                 st.markdown(response)
 
-                # 호감도 업데이트
+                if used_model == "Gemini":
+                    st.toast("⚡ Groq 한도 초과 → Gemini로 자동 전환됐어요!", icon="🔄")
+
                 new_aff = parse_affection(response)
                 if new_aff is not None:
                     st.session_state.affection = new_aff
@@ -214,7 +245,6 @@ if prompt := st.chat_input(f"{char}에게 할 말을 입력하세요..."):
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.session_state.turn_count += 1
 
-                # Supabase에 자동 저장
                 save_game(st.session_state.user_id)
 
                 if new_aff is not None:
