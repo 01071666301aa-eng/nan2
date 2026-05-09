@@ -7,7 +7,7 @@ st.set_page_config(page_title="이서 프로젝트", page_icon="🌙")
 st.title("🌙 이서 프로젝트: 미연시 웹소설")
 
 # 2. API 키 설정
-client = Groq(api_key="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")
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # --- 이미지 파일 설정 (여기를 네 파일 이름으로 바꿔!) ---
 iseo_avatar = "rem_profile.png"  # 이서 프로필 이미지 파일명
