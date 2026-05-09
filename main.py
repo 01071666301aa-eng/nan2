@@ -66,7 +66,7 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
     # 1순위: Groq
     try:
         completion = groq_client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": system_prompt}] + api_messages,
             temperature=0.75,
             top_p=0.9,
