@@ -52,9 +52,13 @@ def load_game(user_id: str):
     return data[0] if data else None
 
 # ── 5. 호감도 파싱 ───────────────────────────────────────────
-def parse_affection(text: str):
+def parse_affection(text: str, current: int) -> int:
     match = re.search(r"\[현재 호감도:\s*(\d+)\]", text)
-    return int(match.group(1)) if match else None
+    if not match:
+        return current
+    new_aff = int(match.group(1))
+    delta = max(-10, min(10, new_aff - current))
+    return max(0, min(100, current + delta))
 
 # ── 6. 컨텍스트 윈도우 제한 (최근 10턴) ─────────────────────
 MAX_TURNS = 10
@@ -238,9 +242,8 @@ if prompt := st.chat_input(f"{char}에게 할 말을 입력하세요..."):
                 if used_model == "Gemini":
                     st.toast("⚡ Groq 한도 초과 → Gemini로 자동 전환됐어요!", icon="🔄")
 
-                new_aff = parse_affection(response)
-                if new_aff is not None:
-                    st.session_state.affection = new_aff
+                new_aff = parse_affection(response, st.session_state.affection)
+                st.session_state.affection = new_aff
 
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.session_state.turn_count += 1
