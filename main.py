@@ -111,14 +111,13 @@ def save_game(user_id: str):
     data = {
         "user_id":        user_id,
         "my_name":        st.session_state.my_name,
-	"my_gender = st.radio("성별", ["여성", "남성"], horizontal=True),
+        "my_gender":      st.session_state.my_gender,
         "my_personality": json.dumps(st.session_state.my_personality, ensure_ascii=False),
         "my_intro":       st.session_state.my_intro,
         "genre":          st.session_state.genre,
         "messages":       st.session_state.messages,
         "affection":      st.session_state.affection,
         "turn_count":     st.session_state.turn_count,
-	"my_gender":     st.session_state.my_gender,
     }
     requests.post(f"{SUPABASE_URL}/rest/v1/save_data", headers=HEADERS, json=data)
 
@@ -133,7 +132,6 @@ def load_game(user_id: str):
 # ── 5. 호감도 파싱 (변동폭 ±10 제한) ────────────────────────
 def parse_affection(text: str, current: dict) -> dict:
     updated = current.copy()
-    # [차도진 호감도: 숫자] 형식 파싱
     for char in CHARACTERS:
         match = re.search(rf"\[{char}\s*호감도:\s*(\d+)\]", text)
         if match:
@@ -181,9 +179,9 @@ def get_trimmed_messages():
 # ── 7. 시스템 프롬프트 생성 ──────────────────────────────────
 def build_system_prompt() -> str:
     my      = st.session_state.my_name
+    gender  = st.session_state.my_gender
     traits  = ", ".join(st.session_state.my_personality)
     intro   = st.session_state.my_intro or "특별한 소개 없음"
-    gender = st.session_state.my_gender
     genre   = st.session_state.genre
     world   = GENRE_SETTINGS[genre]["world"]
 
@@ -202,6 +200,8 @@ def build_system_prompt() -> str:
 - 성별: {gender}
 - 성격: {traits}
 - 소개: {intro}
+
+※ 주인공의 성별은 반드시 '{gender}'로 일관되게 유지해야 한다. 절대 혼동하지 마라.
 
 ■ 등장인물
 {char_desc}
@@ -240,16 +240,16 @@ def build_system_prompt() -> str:
 
 # ── 8. 세션 상태 초기화 ──────────────────────────────────────
 if "step" not in st.session_state:
-    st.session_state.step       = "login"      # login / setup / genre / intro / story
-    st.session_state.user_id    = None
-    st.session_state.my_name    = ""
-    st.session_state.my_personality = []
-    st.session_state.my_intro   = ""
-    st.session_state.genre      = ""
-    st.session_state.messages   = []
-    st.session_state.affection  = {name: 5 for name in CHARACTERS}
-    st.session_state.turn_count = 0
-    st.session_state.my_gender       = "여성" 
+    st.session_state.step            = "login"
+    st.session_state.user_id         = None
+    st.session_state.my_name         = ""
+    st.session_state.my_gender       = "여성"
+    st.session_state.my_personality  = []
+    st.session_state.my_intro        = ""
+    st.session_state.genre           = ""
+    st.session_state.messages        = []
+    st.session_state.affection       = {name: 5 for name in CHARACTERS}
+    st.session_state.turn_count      = 0
 
 # ── 9. STEP 1: 로그인 ────────────────────────────────────────
 if st.session_state.step == "login":
@@ -280,6 +280,7 @@ if st.session_state.step == "login":
             saved = load_game(user_id)
             if saved:
                 st.session_state.my_name        = saved["my_name"]
+                st.session_state.my_gender      = saved.get("my_gender", "여성")
                 st.session_state.my_personality = json.loads(saved["my_personality"])
                 st.session_state.my_intro       = saved["my_intro"]
                 st.session_state.genre          = saved["genre"]
@@ -301,7 +302,7 @@ elif st.session_state.step == "setup":
     st.divider()
 
     my_name   = st.text_input("주인공 이름", placeholder="예: 이하늘")
-    my_gender = st.radio("성별", ["여성", "남성"], horizontal=True)  # ← 있는지 확인
+    my_gender = st.radio("성별", ["여성", "남성"], horizontal=True)
 
     st.markdown("**성격 키워드** (최대 3개 선택)")
     selected = []
@@ -318,7 +319,7 @@ elif st.session_state.step == "setup":
 
     if len(selected) > 3:
         st.warning("성격 키워드는 최대 3개까지만 선택할 수 있어요.")
-    
+
     if st.button("다음 →", use_container_width=True):
         if not my_name:
             st.warning("주인공 이름을 입력해주세요.")
@@ -328,6 +329,7 @@ elif st.session_state.step == "setup":
             st.warning("성격 키워드는 최대 3개까지만 선택할 수 있어요.")
         else:
             st.session_state.my_name        = my_name
+            st.session_state.my_gender      = my_gender
             st.session_state.my_personality = selected
             st.session_state.my_intro       = my_intro
             st.session_state.step           = "genre"
@@ -365,13 +367,12 @@ elif st.session_state.step == "intro":
 
     st.divider()
     if st.button("📖 이야기 시작하기", use_container_width=True):
-        # 첫 오프닝 생성
         system_prompt = build_system_prompt()
         opening_request = [{"role": "user", "content": "이야기를 시작해줘. 첫 장면을 웹소설 도입부처럼 감각적으로 써줘."}]
         with st.spinner("첫 번째 장면을 쓰는 중..."):
             try:
                 response, _ = get_ai_response(system_prompt, opening_request)
-                st.session_state.messages = [{"role": "assistant", "content": response}]
+                st.session_state.messages  = [{"role": "assistant", "content": response}]
                 st.session_state.affection = {name: 5 for name in CHARACTERS}
                 st.session_state.turn_count = 0
                 save_game(st.session_state.user_id)
@@ -384,9 +385,8 @@ elif st.session_state.step == "intro":
 elif st.session_state.step == "story":
     genre_info = GENRE_SETTINGS[st.session_state.genre]
 
-    # 상단 UI
     st.title(f"{genre_info['emoji']} {st.session_state.genre}")
-    st.caption(f"주인공: {st.session_state.my_name}  |  {' · '.join(st.session_state.my_personality)}")
+    st.caption(f"주인공: {st.session_state.my_name} ({st.session_state.my_gender})  |  {' · '.join(st.session_state.my_personality)}")
 
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -445,7 +445,6 @@ elif st.session_state.step == "story":
                         if used_model == "Gemini":
                             st.toast("⚡ Gemini로 자동 전환됐어요!", icon="🔄")
 
-                        # 호감도 업데이트
                         new_aff = parse_affection(response, st.session_state.affection)
                         st.session_state.affection = new_aff
 
