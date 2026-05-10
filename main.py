@@ -31,7 +31,6 @@ CHARACTERS = {
         "personality": (
             "냉철하고 분석적인 완벽주의자. '나'의 일에서만 평정심을 잃음. "
             "소유욕 강하고 뒤에서 조용히 챙겨주는 키다리 아저씨형. "
-            "말투: 단호하고 간결한 문어체. '~했나?', '필요 없어.' "
             "감정이 격해지면 넥타이를 거칠게 푸는 버릇이 있음."
         ),
     },
@@ -41,7 +40,6 @@ CHARACTERS = {
         "personality": (
             "공감 능력이 뛰어나고 다정다감한 만인의 연인. "
             "'나'의 웃음을 인생 최우선 순위로 둠. 헌신적이고 감성적. "
-            "말투: 다정한 구어체, 질문형 문장 많음. '밥은 먹었어?', '~할까?' "
             "항상 주머니에 '나'가 좋아하는 사탕을 넣고 다님."
         ),
     },
@@ -51,7 +49,6 @@ CHARACTERS = {
         "personality": (
             "세련된 외면 뒤에 열등감과 욕망을 숨긴 라이벌. "
             "계산이 빠르고 원하는 것을 위해 수단 방법을 가리지 않음. "
-            "말투: 우아하지만 뼈 있는 말투. '~하나 봐요?', '어머, 몰랐네.' "
             "긴 생머리를 손가락으로 배배 꼬며 상대를 위아래로 훑어보는 습관."
         ),
     },
@@ -61,7 +58,6 @@ CHARACTERS = {
         "personality": (
             "극강의 낙천주의자. 맛집과 가십에 빠삭한 '나'의 절친. "
             "즉흥적이고 친화력 갑. 남주 앞에서도 기죽지 않는 당당함. "
-            "말투: 줄임말과 신조어 섞은 유쾌한 말투. '대박 사건!', '실화냐고~' "
             "가방 속에 항상 정체 모를 간식이 들어있음."
         ),
     },
@@ -71,7 +67,6 @@ CHARACTERS = {
         "personality": (
             "남주의 최측근이자 '나'의 든든한 아군. 두 사람의 징검다리 역할. "
             "과묵하고 성실하며 남주의 속마음을 누구보다 빠르게 캐치함. "
-            "말투: 극도로 격식 차린 비즈니스 말투. '~입니다만.', '전달하겠습니다.' "
             "안경을 치켜올릴 때 렌즈가 번쩍이는 연출이 자주 등장함."
         ),
     },
@@ -129,15 +124,15 @@ def load_game(user_id: str):
     data = res.json()
     return data[0] if data else None
 
-# ── 5. 호감도 파싱 (변동폭 ±10 제한) ────────────────────────
+# ── 5. 호감도 파싱 (변화량 방식, 최대 ±5 강제 제한) ─────────
 def parse_affection(text: str, current: dict) -> dict:
     updated = current.copy()
     for char in CHARACTERS:
-        match = re.search(rf"\[{char}\s*호감도:\s*(\d+)\]", text)
+        match = re.search(rf"\[{char}\s*([+-]\d+)\]", text)
         if match:
-            new_val = int(match.group(1))
+            delta = int(match.group(1))
+            delta = max(-5, min(5, delta))  # 코드에서 ±5 강제 제한
             old_val = current.get(char, 5)
-            delta = max(-10, min(10, new_val - old_val))
             updated[char] = max(0, min(100, old_val + delta))
     return updated
 
@@ -176,21 +171,35 @@ MAX_TURNS = 10
 def get_trimmed_messages():
     return st.session_state.messages[-(MAX_TURNS * 2):]
 
-# ── 7. 시스템 프롬프트 생성 ──────────────────────────────────
+# ── 7. 텍스트 정제 (호감도 주석 숨김) ───────────────────────
+def clean_text(text: str) -> str:
+    return re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL).strip()
+
+# ── 8. 시스템 프롬프트 생성 ──────────────────────────────────
 def build_system_prompt() -> str:
-    my      = st.session_state.my_name
-    gender  = st.session_state.my_gender
-    traits  = ", ".join(st.session_state.my_personality)
-    intro   = st.session_state.my_intro or "특별한 소개 없음"
-    genre   = st.session_state.genre
-    world   = GENRE_SETTINGS[genre]["world"]
+    my     = st.session_state.my_name
+    gender = st.session_state.my_gender
+    traits = ", ".join(st.session_state.my_personality)
+    intro  = st.session_state.my_intro or "특별한 소개 없음"
+    genre  = st.session_state.genre
+    world  = GENRE_SETTINGS[genre]["world"]
+    aff    = st.session_state.affection
 
     char_desc = ""
     for name, info in CHARACTERS.items():
-        char_desc += f"\n### {name} ({info['role']})\n{info['personality']}\n"
+        a = aff.get(name, 5)
+        if a >= 90:
+            tone = "감정을 숨기지 않는 다정하고 솔직한 말투. 연인처럼 자연스러운 20~30대 반말."
+        elif a >= 60:
+            tone = "편한 친구 같은 20~30대 자연스러운 반말. 가끔 장난기도 섞임."
+        elif a >= 30:
+            tone = "친근해지기 시작하는 20~30대 반말. 아직 살짝 거리감 있음."
+        else:
+            tone = "격식 있고 거리감 있는 말투. 친하지 않은 사람 대하듯."
+        char_desc += f"\n### {name} ({info['role']})\n{info['personality']}\n현재 말투: {tone}\n"
 
     return f"""\
-너는 한국 웹소설 작가야. 지금부터 독자가 직접 참여하는 인터랙티브 웹소설을 진행해.
+너는 한국 웹소설 작가야. 지금부터 독자가 직접 참여하는 인터랙티브 웹소설을 써줘.
 
 ■ 세계관 및 장르: {genre}
 {world}
@@ -201,28 +210,38 @@ def build_system_prompt() -> str:
 - 성격: {traits}
 - 소개: {intro}
 
-※ 주인공의 성별은 반드시 '{gender}'로 일관되게 유지해야 한다. 절대 혼동하지 마라.
+※ 주인공 성별은 반드시 '{gender}'로 고정. 절대 혼동 금지.
 
 ■ 등장인물
 {char_desc}
 
 ■ 출력 형식 (반드시 준수)
 1. [장소 — 시간대] 형식으로 배경 표시
-2. 전지적 작가 시점의 소설체(~다/~했다)로 상황 묘사
-3. 등장인물 대사: "이름: "대사"" 형식
-4. 상황에 맞는 인물만 등장 (1~3명 적절히 선택)
-5. 호감도는 절대 출력하지 마라. 내부적으로만 계산하고,
-   [캐릭터이름 호감도: 숫자] 형식은 텍스트 맨 마지막 줄에
-   독자에게 보이지 않는 주석처럼 한 줄로만 추가해라.
-   예: <!-- [차도진 호감도: 12] [서하준 호감도: 8] -->
+2. 전지적 작가 시점 소설체(~다/~했다)로 상황 묘사
+3. 등장인물 대사: 이름: "대사" 형식
+4. 상황에 맞는 인물만 등장 (1~3명)
+5. 본문 마지막에 아래 형식으로 호감도 변화량만 HTML 주석으로 표기:
+   <!-- [캐릭터이름 +숫자] [캐릭터이름 -숫자] -->
+   예: <!-- [차도진 +2] [서하준 -1] -->
+   - 등장한 캐릭터만 표기할 것
+   - 변화량은 반드시 -5 ~ +5 사이로만 작성
+   - 절댓값 호감도 숫자는 절대 쓰지 마라
+   - 본문에 호감도 관련 텍스트가 보이면 절대 안 됨
 
 ■ 호감도 규칙
-- 각 캐릭터 시작값: 5, 범위: 0~100
+- 각 캐릭터 시작값: 5 / 범위: 0~100
 - '나'의 행동·말에 따라 자연스럽게 변동
-- 절대 한 번에 10점 이상 변동 금지
+- 한 턴에 최대 ±5점 변동
+- 호감도가 높아질수록 말투가 자연스럽고 친근하게 변함
 
-■ 사용자가 "/호감도" 입력 시
-모든 캐릭터의 현재 호감도를 표로 출력하고 간단한 관계 코멘트 추가
+■ 말투 변화 분기
+- 0~29점: 격식체, 거리감 있는 말투
+- 30~59점: 친근해지는 20~30대 반말 시작
+- 60~89점: 편한 친구 같은 자연스러운 반말
+- 90~100점: 감정 솔직한 다정한 말투
+
+■ /호감도 명령어
+사용자가 "/호감도" 입력 시에만 모든 캐릭터 호감도를 표로 출력
 
 ■ 장르별 분위기
 - 로맨스/학원: 설렘과 감정선 중심
@@ -230,8 +249,8 @@ def build_system_prompt() -> str:
 - 성인로맨스: 농밀한 감정선, 절제된 표현 안에서 최대한의 긴장감과 욕망 묘사
 
 ■ 절대 규칙
-- 오직 한국어만 사용
-- 영어·한자·외국어 절대 금지
+- 오직 완벽한 한국어만 사용
+- 영어·한자·러시아어·일본어 등 외국어 한 글자도 절대 금지
 - 몰입감 있는 문학적 문체 유지
 - 사용자 입력을 자연스럽게 스토리에 녹여낼 것
 """
@@ -240,20 +259,20 @@ def build_system_prompt() -> str:
 # UI 시작
 # ════════════════════════════════════════════════════════════
 
-# ── 8. 세션 상태 초기화 ──────────────────────────────────────
+# ── 9. 세션 상태 초기화 ──────────────────────────────────────
 if "step" not in st.session_state:
-    st.session_state.step            = "login"
-    st.session_state.user_id         = None
-    st.session_state.my_name         = ""
-    st.session_state.my_gender       = "여성"
-    st.session_state.my_personality  = []
-    st.session_state.my_intro        = ""
-    st.session_state.genre           = ""
-    st.session_state.messages        = []
-    st.session_state.affection       = {name: 5 for name in CHARACTERS}
-    st.session_state.turn_count      = 0
+    st.session_state.step           = "login"
+    st.session_state.user_id        = None
+    st.session_state.my_name        = ""
+    st.session_state.my_gender      = "여성"
+    st.session_state.my_personality = []
+    st.session_state.my_intro       = ""
+    st.session_state.genre          = ""
+    st.session_state.messages       = []
+    st.session_state.affection      = {name: 5 for name in CHARACTERS}
+    st.session_state.turn_count     = 0
 
-# ── 9. STEP 1: 로그인 ────────────────────────────────────────
+# ── 10. STEP 1: 로그인 ───────────────────────────────────────
 if st.session_state.step == "login":
     st.title("📖 당신의 이야기")
     st.caption("나만의 웹소설을 시작하세요.")
@@ -297,7 +316,7 @@ if st.session_state.step == "login":
     elif (start or reset) and not (name and password):
         st.warning("이름과 비밀번호를 입력해주세요.")
 
-# ── 10. STEP 2: 주인공 설정 ──────────────────────────────────
+# ── 11. STEP 2: 주인공 설정 ──────────────────────────────────
 elif st.session_state.step == "setup":
     st.title("✍️ 주인공 설정")
     st.caption("이야기 속 '나'를 만들어주세요.")
@@ -337,7 +356,7 @@ elif st.session_state.step == "setup":
             st.session_state.step           = "genre"
             st.rerun()
 
-# ── 11. STEP 3: 장르 선택 (타로카드) ─────────────────────────
+# ── 12. STEP 3: 장르 선택 ────────────────────────────────────
 elif st.session_state.step == "genre":
     st.title("🃏 장르를 선택하세요")
     st.caption("카드를 뽑아 당신의 이야기를 시작하세요.")
@@ -355,7 +374,7 @@ elif st.session_state.step == "genre":
                 st.session_state.step  = "intro"
                 st.rerun()
 
-# ── 12. STEP 4: 캐릭터 소개 ──────────────────────────────────
+# ── 13. STEP 4: 캐릭터 소개 ──────────────────────────────────
 elif st.session_state.step == "intro":
     genre_info = GENRE_SETTINGS[st.session_state.genre]
     st.title(f"{genre_info['emoji']} {st.session_state.genre}")
@@ -369,13 +388,13 @@ elif st.session_state.step == "intro":
 
     st.divider()
     if st.button("📖 이야기 시작하기", use_container_width=True):
-        system_prompt = build_system_prompt()
+        system_prompt   = build_system_prompt()
         opening_request = [{"role": "user", "content": "이야기를 시작해줘. 첫 장면을 웹소설 도입부처럼 감각적으로 써줘."}]
         with st.spinner("첫 번째 장면을 쓰는 중..."):
             try:
                 response, _ = get_ai_response(system_prompt, opening_request)
-                st.session_state.messages  = [{"role": "assistant", "content": response}]
-                st.session_state.affection = {name: 5 for name in CHARACTERS}
+                st.session_state.messages   = [{"role": "assistant", "content": response}]
+                st.session_state.affection  = {name: 5 for name in CHARACTERS}
                 st.session_state.turn_count = 0
                 save_game(st.session_state.user_id)
                 st.session_state.step = "story"
@@ -383,7 +402,7 @@ elif st.session_state.step == "intro":
             except Exception as e:
                 st.error(f"오류가 발생했어요: {e}")
 
-# ── 13. STEP 5: 메인 스토리 ──────────────────────────────────
+# ── 14. STEP 5: 메인 스토리 ──────────────────────────────────
 elif st.session_state.step == "story":
     genre_info = GENRE_SETTINGS[st.session_state.genre]
 
@@ -399,27 +418,25 @@ elif st.session_state.step == "story":
 
     st.divider()
 
-    # 대화 출력
+    # 대화 출력 (호감도 주석 숨김)
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             with st.chat_message("user", avatar="👤"):
                 st.markdown(msg["content"])
         elif msg["role"] == "assistant":
             with st.chat_message("assistant", avatar="📖"):
-                clean = re.sub(r'<!--.*?-->', '', msg["content"], flags=re.DOTALL).strip()
-                st.markdown(clean)
+                st.markdown(clean_text(msg["content"]))
 
     # 입력 처리
-    hint = "이야기를 이어가세요... (호감도 확인: /호감도)"
-    if prompt := st.chat_input(hint):
+    if prompt := st.chat_input("이야기를 이어가세요... (호감도 확인: /호감도)"):
 
         # /호감도 명령어
         if prompt.strip() == "/호감도":
-            aff = st.session_state.affection
+            aff    = st.session_state.affection
             result = "### 📊 현재 호감도\n\n"
             for char, val in aff.items():
-                info = CHARACTERS[char]
-                bar = "█" * (val // 10) + "░" * (10 - val // 10)
+                info  = CHARACTERS[char]
+                bar   = "█" * (val // 10) + "░" * (10 - val // 10)
                 label = (
                     "💗 연인 단계"   if val >= 90 else
                     "🌸 친밀한 사이" if val >= 60 else
@@ -430,6 +447,7 @@ elif st.session_state.step == "story":
                 result += f"`{bar}` {val}/100  {label}\n\n"
             with st.chat_message("assistant", avatar="📊"):
                 st.markdown(result)
+
         else:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user", avatar="👤"):
@@ -443,16 +461,18 @@ elif st.session_state.step == "story":
                             system_prompt,
                             get_trimmed_messages()
                         )
-                        clean = re.sub(r'<!--.*?-->', '', response, flags=re.DOTALL).strip()
-                        st.markdown(clean)
 
+                        # 화면엔 주석 제거된 텍스트 출력
+                        st.markdown(clean_text(response))
 
                         if used_model == "Gemini":
                             st.toast("⚡ Gemini로 자동 전환됐어요!", icon="🔄")
 
+                        # 호감도 업데이트 (원본 response에서 파싱)
                         new_aff = parse_affection(response, st.session_state.affection)
                         st.session_state.affection = new_aff
 
+                        # 원본 저장 (호감도 주석 포함)
                         st.session_state.messages.append({"role": "assistant", "content": response})
                         st.session_state.turn_count += 1
                         save_game(st.session_state.user_id)
