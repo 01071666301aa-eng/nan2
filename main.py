@@ -111,16 +111,16 @@ def save_game(user_id: str):
     data = {
         "user_id":        user_id,
         "my_name":        st.session_state.my_name,
-        "my_gender":      st.session_state.my_gender,
+	"my_gender = st.radio("성별", ["여성", "남성"], horizontal=True),
         "my_personality": json.dumps(st.session_state.my_personality, ensure_ascii=False),
         "my_intro":       st.session_state.my_intro,
         "genre":          st.session_state.genre,
         "messages":       st.session_state.messages,
         "affection":      st.session_state.affection,
         "turn_count":     st.session_state.turn_count,
+	"my_gender":     st.session_state.my_gender,
     }
     requests.post(f"{SUPABASE_URL}/rest/v1/save_data", headers=HEADERS, json=data)
-
 
 def load_game(user_id: str):
     res = requests.get(
@@ -249,6 +249,7 @@ if "step" not in st.session_state:
     st.session_state.messages   = []
     st.session_state.affection  = {name: 5 for name in CHARACTERS}
     st.session_state.turn_count = 0
+    st.session_state.my_gender       = "여성" 
 
 # ── 9. STEP 1: 로그인 ────────────────────────────────────────
 if st.session_state.step == "login":
@@ -299,7 +300,8 @@ elif st.session_state.step == "setup":
     st.caption("이야기 속 '나'를 만들어주세요.")
     st.divider()
 
-    my_name = st.text_input("주인공 이름", placeholder="예: 이하늘")
+    my_name   = st.text_input("주인공 이름", placeholder="예: 이하늘")
+    my_gender = st.radio("성별", ["여성", "남성"], horizontal=True)  # ← 있는지 확인
 
     st.markdown("**성격 키워드** (최대 3개 선택)")
     selected = []
