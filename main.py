@@ -211,8 +211,10 @@ def build_system_prompt() -> str:
 2. 전지적 작가 시점의 소설체(~다/~했다)로 상황 묘사
 3. 등장인물 대사: "이름: "대사"" 형식
 4. 상황에 맞는 인물만 등장 (1~3명 적절히 선택)
-5. 마지막 줄에 등장한 캐릭터의 호감도만 표시:
-   [캐릭터이름 호감도: 숫자]
+5. 호감도는 절대 출력하지 마라. 내부적으로만 계산하고,
+   [캐릭터이름 호감도: 숫자] 형식은 텍스트 맨 마지막 줄에
+   독자에게 보이지 않는 주석처럼 한 줄로만 추가해라.
+   예: <!-- [차도진 호감도: 12] [서하준 호감도: 8] -->
 
 ■ 호감도 규칙
 - 각 캐릭터 시작값: 5, 범위: 0~100
@@ -404,7 +406,8 @@ elif st.session_state.step == "story":
                 st.markdown(msg["content"])
         elif msg["role"] == "assistant":
             with st.chat_message("assistant", avatar="📖"):
-                st.markdown(msg["content"])
+                clean = re.sub(r'<!--.*?-->', '', msg["content"], flags=re.DOTALL).strip()
+                st.markdown(clean)
 
     # 입력 처리
     hint = "이야기를 이어가세요... (호감도 확인: /호감도)"
@@ -440,7 +443,9 @@ elif st.session_state.step == "story":
                             system_prompt,
                             get_trimmed_messages()
                         )
-                        st.markdown(response)
+                        clean = re.sub(r'<!--.*?-->', '', response, flags=re.DOTALL).strip()
+                        st.markdown(clean)
+
 
                         if used_model == "Gemini":
                             st.toast("⚡ Gemini로 자동 전환됐어요!", icon="🔄")
