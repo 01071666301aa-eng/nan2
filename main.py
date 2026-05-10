@@ -111,7 +111,7 @@ def save_game(user_id: str):
     data = {
         "user_id":        user_id,
         "my_name":        st.session_state.my_name,
-	"my_gender = st.radio("성별", ["여성", "남성"], horizontal=True),
+		"my_gender = st.radio("성별", ["여성", "남성"], horizontal=True),
         "my_personality": json.dumps(st.session_state.my_personality, ensure_ascii=False),
         "my_intro":       st.session_state.my_intro,
         "genre":          st.session_state.genre,
