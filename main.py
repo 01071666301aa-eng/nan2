@@ -140,7 +140,7 @@ def parse_affection(text: str, current: dict) -> dict:
 def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": system_prompt}] + api_messages,
             temperature=0.85,
             top_p=0.9,
@@ -221,8 +221,8 @@ def build_system_prompt() -> str:
 1. [장소 — 시간대] 형식으로 배경 표시
 2. 별도 태그 없이 바로 소설 문체로 서술. '[전지적 작가 시점]' 같은 메타 태그 절대 사용 금지.
 3. 문체는 한국 정통 웹소설 스타일. 간결하고 감각적인 문장. 너무 길거나 설명적인 문장 금지.
-   좋은 예: "차도진이 서류를 덮었다. 그의 시선이 천천히 이하늘에게로 향했다."
-   나쁜 예: "이하늘은 이 세계의 이치와 법칙을 풀어헤쳐 볼 수 있는 기회가 있을까 생각했습니다."
+   좋은 예: "차도진이 서류를 덮었다. 그의 시선이 천천히 정예진에게로 향했다."
+   나쁜 예: "정예진은 이 세계의 이치와 법칙을 풀어헤쳐 볼 수 있는 기회가 있을까 생각했습니다."
 4. 등장인물 대사는 반드시 앞뒤로 빈 줄을 넣어 단독 줄로 표기:
    형식: 이름: "대사"
    
@@ -231,7 +231,7 @@ def build_system_prompt() -> str:
    
    차도진: "늦었군."
    
-   이하늘은 아무 말도 하지 못했다.
+   정예진은 아무 말도 하지 못했다.
    
    나쁜 예:
    차도진이 고개를 들며 차도진: "늦었군." 이라고 말했다.
@@ -254,6 +254,7 @@ def build_system_prompt() -> str:
 - 0~29점: 격식체, 거리감 있는 말투
 - 30~59점: 친근해지는 20~30대 반말 시작
 - 60~89점: 편한 친구 같은 자연스러운 반말
+**70~100점: 이름을 불러줄 때 예진이라고 이름만 불러줬으면 좋겠어.
 - 90~100점: 감정 솔직한 다정한 말투
 
 ■ /호감도 명령어
@@ -269,6 +270,15 @@ def build_system_prompt() -> str:
 - 영어·한자·러시아어·일본어 등 외국어 한 글자도 절대 금지
 - 몰입감 있는 문학적 문체 유지
 - 사용자 입력을 자연스럽게 스토리에 녹여낼 것
+- 본인을 3인칭 시점으로 부르지 않았으면 좋겠어
+- 똑같은 단어를 지속적으로 반복하는 행위 금지
+
+■ 문장 품질 규칙
+- 같은 단어를 한 문단에서 2회 이상 반복 금지
+- 같은 장소 표현 반복 금지. 한 번 쓴 장소명은 이후 생략하거나 다르게 표현
+- 나쁜 예: "서재 안에서 회의를 하는 동안 차도진은 서재 안에서 그녀를 기다렸다. 차도진은 그녀의 마음을 읽는 차도진이었다."
+- 좋은 예: "밀폐된 서재 너머로 낮은 목소리들이 흘러나왔다. 도진은 문가에 기댄 채 묵묵히 시간을 죽였다. 이따금씩 문 쪽을 향하는 그의 서늘한 눈빛만이 초조함을 드러낼 뿐이었다."
+
 """
 
 # ════════════════════════════════════════════════════════════
@@ -338,7 +348,7 @@ elif st.session_state.step == "setup":
     st.caption("이야기 속 '나'를 만들어주세요.")
     st.divider()
 
-    my_name   = st.text_input("주인공 이름", placeholder="예: 이하늘")
+    my_name   = st.text_input("주인공 이름", placeholder="예: 정예진")
     my_gender = st.radio("성별", ["여성", "남성"], horizontal=True)
 
     st.markdown("**성격 키워드** (최대 3개 선택)")
@@ -399,7 +409,7 @@ elif st.session_state.step == "intro":
 
     st.markdown("### 등장인물")
     for name, info in CHARACTERS.items():
-        with st.expander(f"{info['emoji']} {name} — {info['role']}"):
+        with st.expander(f"{info['emoji']} {name}"):
             st.write(info["personality"])
 
     st.divider()
