@@ -288,30 +288,38 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
 
 # ── 9. 텍스트 정제 & 색상 적용 ──────────────────────────────
 
-def clean_text(text: str) -> str:
-    # 호감도 주석만 제거하고 줄바꿈은 보존합니다.
-    return re.sub(r'', '', text, flags=re.DOTALL).strip()
-
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
-    # 이름: "대사" 패턴을 찾아 설정된 색상을 입힙니다.
+    # 1. AI가 출력한 원본 텍스트에서 이름 부분을 찾습니다.
+    # 패턴: "이름: " 또는 "이름 :"
     for name, info in characters.items():
         color = info.get("color", "#000000")
-        # 정규식: 이름 뒤에 콜론과 따옴표가 오는 패턴을 찾음
-        pattern = rf'({re.escape(name)}:\s*"[^"]*")'
-        text = re.sub(pattern, rf'<span style="color:{color}; font-weight:600;">\1</span>', text)
+        # 이름 뒤에 콜론이 붙은 대사 패턴을 정확히 매칭
+        pattern = rf'({re.escape(name)})\s*:\s*'
+        # 이름을 색상이 들어간 HTML 태그로 치환 (뒤의 대사는 건드리지 않음)
+        replacement = f'<span style="color:{color}; font-weight:bold;">\\1</span>: '
+        text = re.sub(pattern, replacement, text)
+    return text
+
+def clean_text(text: str) -> str:
+    # 같은 주석과 [장소] 같은 메타 정보를 깔끔히 정리합니다.
+    text = re.sub(r'', '', text, flags=re.DOTALL)
+    # 불필요한 빈 괄호나 잔여 문자 정리
+    text = text.replace('()', '').replace('[]', '').strip()
     return text
 
 def render_message(text: str):
-    # 1. 먼저 외국어를 필터링합니다.
+    # 1. 외국어(일어/한자) 물리적 제거
     filtered = filter_foreign(text)
-    # 2. 호감도 주석 등 불필요한 텍스트를 지웁니다.
-    cleaned = clean_text(filtered)
-    # 3. 캐릭터 이름을 찾아 색상을 입힙니다.
-    colored = colorize_dialogue(cleaned)
     
-    # 최종 출력 (HTML 허용)
-    st.markdown(colored, unsafe_allow_html=True)
+    # 2. 색상 적용 (이름: "대사" 형식 유지 상태에서 실행)
+    colored = colorize_dialogue(filtered)
+    
+    # 3. 마지막으로 불필요한 주석 제거
+    final_text = clean_text(colored)
+    
+    # 4. 줄바꿈 보존을 위해 st.write 대신 st.markdown 사용
+    st.markdown(final_text.replace('\n', '  \n'), unsafe_allow_html=True)
     
 # ── 10. 시스템 프롬프트 생성 ─────────────────────────────────
 def build_system_prompt() -> str:
