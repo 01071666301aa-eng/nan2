@@ -404,54 +404,41 @@ if "step" not in st.session_state:
     st.session_state.user_notes     = ""
 
 # ── 12. STEP 1: 로그인 ───────────────────────────────────────
-if st.session_state.step == "login":
-    st.title("📖 당신의 이야기")
-    st.caption("나만의 웹소설을 시작하세요.")
-    st.divider()
-
-    name     = st.text_input("이름", placeholder="예: 종완")
-    password = st.text_input("비밀번호", type="password", placeholder="본인만 아는 비밀번호")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        start = st.button("▶ 시작 / 이어하기", use_container_width=True)
-    with col2:
-        reset = st.button("🗑 처음부터 다시", use_container_width=True)
-
-    if (start or reset) and name and password:
+if (start or reset) and name and password:
         user_id = hashlib.sha256(f"{name}{password}".encode()).hexdigest()[:16]
         st.session_state.user_id = user_id
-
+        
         if reset:
-            requests.delete(
-                f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}",
-                headers=HEADERS
-            )
+            requests.delete(f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}", headers=HEADERS)
             st.session_state.step = "setup"
+            st.rerun()  # 리셋 후 즉시 리런
         else:
             saved = load_game(user_id)
             if saved:
-                st.session_state.my_name        = saved["my_name"]
-                st.session_state.my_gender      = saved.get("my_gender", "여성")
+                # 데이터를 먼저 세션에 모두 할당
+                st.session_state.my_name = saved["my_name"]
+                st.session_state.my_gender = saved.get("my_gender", "여성")
                 st.session_state.my_personality = json.loads(saved["my_personality"])
-                st.session_state.my_intro       = saved.get("my_intro", "")
-                st.session_state.genre          = saved.get("genre", "")
-                st.session_state.rating         = saved.get("rating", "💫 로맨스")
-                st.session_state.relation       = saved.get("relation", "🤝 처음 만나는 사이")
-                st.session_state.messages       = saved["messages"]
-                st.session_state.affection      = saved["affection"]
-                st.session_state.turn_count     = saved["turn_count"]
-                st.session_state.user_notes     = saved.get("user_notes", "")
+                st.session_state.my_intro = saved.get("my_intro", "")
+                st.session_state.genre = saved.get("genre", "")
+                st.session_state.rating = saved.get("rating", "💫 로맨스")
+                st.session_state.relation = saved.get("relation", "🤝 처음 만나는 사이")
+                st.session_state.messages = saved["messages"]
+                st.session_state.affection = saved["affection"]
+                st.session_state.turn_count = saved["turn_count"]
+                st.session_state.user_notes = saved.get("user_notes", "")
+                
                 raw_chars = saved.get("char_name", "{}")
-                st.session_state.characters     = json.loads(raw_chars) if isinstance(raw_chars, str) else raw_chars
-                st.session_state.step           = "story"
+                st.session_state.characters = json.loads(raw_chars) if isinstance(raw_chars, str) else raw_chars
+                
+                # 모든 데이터 로드 후 step을 story로 고정하고 리런
+                st.session_state.step = "story"
+                st.rerun() 
             else:
+                # 저장된 데이터가 없는 신규 유저만 setup으로
                 st.session_state.step = "setup"
-        st.rerun()
-
-    elif (start or reset) and not (name and password):
-        st.warning("이름과 비밀번호를 입력해주세요.")
-
+                st.rerun()
+                
 # ── 13. STEP 2: 주인공 설정 ──────────────────────────────────
 elif st.session_state.step == "setup":
     st.title("✍️ 주인공 설정")
