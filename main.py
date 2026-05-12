@@ -404,18 +404,38 @@ if "step" not in st.session_state:
     st.session_state.user_notes     = ""
 
 # ── 12. STEP 1: 로그인 ───────────────────────────────────────
-if (start or reset) and name and password:
+# ── 12. STEP 1: 로그인 ───────────────────────────────────────
+if st.session_state.step == "login":
+    st.title("📂 스토리 불러오기")
+    st.caption("이름과 비밀번호를 입력하여 여정을 이어가세요.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        name = st.text_input("주인공 이름", key="login_name")
+    with col2:
+        password = st.text_input("비밀번호", type="password", key="login_pw")
+
+    st.write("")
+    c1, c2 = st.columns(2)
+    with c1:
+        start = st.button("▶ 시작 / 이어하기", use_container_width=True)
+    with c2:
+        reset = st.button("🗑 처음부터 다시", use_container_width=True)
+
+    # 버튼이 눌렸을 때만 로직 실행 (NameError 방지)
+    if (start or reset) and name and password:
         user_id = hashlib.sha256(f"{name}{password}".encode()).hexdigest()[:16]
         st.session_state.user_id = user_id
         
         if reset:
+            # 기존 데이터 삭제 요청
             requests.delete(f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}", headers=HEADERS)
             st.session_state.step = "setup"
-            st.rerun()  # 리셋 후 즉시 리런
+            st.rerun()
         else:
             saved = load_game(user_id)
             if saved:
-                # 데이터를 먼저 세션에 모두 할당
+                # 저장된 데이터를 세션에 할당
                 st.session_state.my_name = saved["my_name"]
                 st.session_state.my_gender = saved.get("my_gender", "여성")
                 st.session_state.my_personality = json.loads(saved["my_personality"])
@@ -431,13 +451,15 @@ if (start or reset) and name and password:
                 raw_chars = saved.get("char_name", "{}")
                 st.session_state.characters = json.loads(raw_chars) if isinstance(raw_chars, str) else raw_chars
                 
-                # 모든 데이터 로드 후 step을 story로 고정하고 리런
+                # 로드 완료 후 스토리로 이동
                 st.session_state.step = "story"
-                st.rerun() 
+                st.rerun()
             else:
-                # 저장된 데이터가 없는 신규 유저만 setup으로
+                # 데이터가 없으면 설정 화면으로
                 st.session_state.step = "setup"
                 st.rerun()
+    elif (start or reset) and not (name and password):
+        st.warning("이름과 비밀번호를 모두 입력해주세요.")
                 
 # ── 13. STEP 2: 주인공 설정 ──────────────────────────────────
 elif st.session_state.step == "setup":
