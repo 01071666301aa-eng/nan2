@@ -172,27 +172,30 @@ def filter_foreign(text: str) -> str:
         placeholders.append(m.group(0))
         return f"__PRESERVE_{len(placeholders)-1}__"
 
-    # HTML 태그, 코드블록 보호
+    # 1. HTML 태그, 코드블록 보호
     text = re.sub(r'<[^>]+>|```[\s\S]*?```|`[^`]*`', preserve, text)
 
-    # 화이트리스트 단어 보호
+    # 2. 화이트리스트(CEO 등) 보호
     for word in WHITELIST:
         text = re.sub(rf'\b{re.escape(word)}\b', preserve, text, flags=re.IGNORECASE)
 
-    # --- 수정된 부분: 한자 및 괄호 안의 외국어 제거 ---
-    # 1. 한자 범위([\u4e00-\u9fff]) 제거
+    # --- 실시간 물리적 제거 로직 ---
+    # 3. 한자(Chinese Characters) 전체 제거
     text = re.sub(r'[\u4e00-\u9fff]+', '', text)
     
-    # 2. 괄호와 그 안의 영문/한자 제거 (예: (这样), (Action))
-    text = re.sub(r'\([A-Za-z\u4e00-\u9fff\s]+\)', '', text)
+    # 4. 괄호와 그 내용 제거 (예: (Feeling), (这样), [Action] 등)
+    # 한글이 포함되지 않은 괄호 내용만 골라서 삭제합니다.
+    text = re.sub(r'\([^가-힣]*?\)', '', text)
+    text = re.sub(r'\[[^가-힣]*?\]', '', text)
 
-    # 3. 나머지 영문 2자 이상 제거
+    # 5. 문장 중간의 영문 2자 이상 단어 제거
     text = re.sub(r'\b[A-Za-z]{2,}\b', '', text)
-    # ----------------------------------------------
+    # ----------------------------
 
-    text = re.sub(r'  +', ' ', text).strip()
+    # 공백 정리
+    text = re.sub(r'  +', ' ', text).replace('()', '').replace('[]', '').strip()
 
-    # 보호 복원
+    # 6. 보호된 단어 복원
     for i, p in enumerate(placeholders):
         text = text.replace(f"__PRESERVE_{i}__", p)
     return text
@@ -361,7 +364,7 @@ def build_system_prompt() -> str:
 
 # build_system_prompt 함수 내의 언어 규칙 섹션을 아래와 같이 강화하세요.
 
-■ ★★★ 언어 절대 규칙 (최우선 순위) ★★★
+■ ★★★ 언어 절대 규칙 (나레이션 포함 최우선) ★★★
 - 출력되는 모든 문장은 반드시 100% '자연스러운 한국어'여야 한다.
 - 한자(这样, 实际 등)나 영어, 일본어 등을 문장 중간에 섞어서 쓰는 행위를 절대 금지한다.
 - "한글(한자)" 또는 "한글(영어)" 같은 병기 방식은 무조건 탈락이다. 
@@ -369,7 +372,10 @@ def build_system_prompt() -> str:
 - 영어 단어가 떠올라도 반드시 한국어로 바꿔서 출력해야 한다.
 - 예: "narrow해졌다" → "가늘어졌다" / "smile지었다" → "미소를 지었다"
 - 이 규칙을 어기면 출력 전체가 실패한 것으로 간주한다.
-- 화이트리스트 약어(CEO, SNS 등)만 예외적으로 허용한다.
+- 화이트리스트 약어(CEO, SNS 등)만 예외적으로 허용한다.- 대사뿐만 아니라 '지문(나레이션)'에서도 100% 한국어만 사용한다.
+- 지문 도중 단어의 뜻을 풀이하거나 외국어를 병기하는 행위(예: "느꼈다(felt)")는 절대 금지다.
+- 한자(한문) 노출 시 즉시 실패로 간주한다.
+- 한국어 단어가 생각나지 않으면 가장 유사한 한국어 정서로 의역하라.
 - 이 규칙을 어기면 작가로서의 자격이 박탈된다고 간주하라.
 
 ■ /호감도 명령어
