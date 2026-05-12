@@ -172,30 +172,36 @@ def filter_foreign(text: str) -> str:
         placeholders.append(m.group(0))
         return f"__PRESERVE_{len(placeholders)-1}__"
 
-    # 1. HTML 태그, 코드블록 보호
+    # 1. 태그 및 화이트리스트 보호
     text = re.sub(r'<[^>]+>|```[\s\S]*?```|`[^`]*`', preserve, text)
-
-    # 2. 화이트리스트(CEO 등) 보호
     for word in WHITELIST:
         text = re.sub(rf'\b{re.escape(word)}\b', preserve, text, flags=re.IGNORECASE)
 
-    # --- 실시간 물리적 제거 로직 ---
-    # 3. 한자(Chinese Characters) 전체 제거
-    text = re.sub(r'[\u4e00-\u9fff]+', '', text)
+    # --- 초강력 외국어 제거 로직 ---
     
-    # 4. 괄호와 그 내용 제거 (예: (Feeling), (这样), [Action] 등)
-    # 한글이 포함되지 않은 괄호 내용만 골라서 삭제합니다.
-    text = re.sub(r'\([^가-힣]*?\)', '', text)
-    text = re.sub(r'\[[^가-힣]*?\]', '', text)
+    # 2. 일어(가타카나/히라가나), 한자, 기타 외국어 문자군 제거
+    # [^\u0000-\u007F\uAC00-\uD7A3\u3130-\u318F\s\.,!\?\(\)":~] 
+    # 위 정규식은 (아스키, 한글, 공백, 주요 문장부호)를 제외한 모든 문자를 삭제합니다.
+    text = re.sub(r'[^\u0000-\u007F\uAC00-\uD7A3\u3130-\u318F\s\.,!\?\(\)":~-]', '', text)
 
-    # 5. 문장 중간의 영문 2자 이상 단어 제거
+    # 3. 괄호와 그 안의 내용이 '한글'을 포함하지 않으면 무조건 삭제
+    # 예: (닉네임) -> 삭제 / (웃으며) -> 유지
+    def clean_brackets(m):
+        content = m.group(1)
+        if re.search(r'[가-힣]', content):
+            return f"({content})"
+        return ""
+    text = re.sub(r'\(([^)]+)\)', clean_brackets, text)
+
+    # 4. 문장 중간의 영문 2자 이상 단어 제거 (화이트리스트 제외)
     text = re.sub(r'\b[A-Za-z]{2,}\b', '', text)
+    
     # ----------------------------
 
-    # 공백 정리
+    # 공백 및 잔여 괄호 정리
     text = re.sub(r'  +', ' ', text).replace('()', '').replace('[]', '').strip()
 
-    # 6. 보호된 단어 복원
+    # 5. 보호된 단어 복원
     for i, p in enumerate(placeholders):
         text = text.replace(f"__PRESERVE_{i}__", p)
     return text
