@@ -223,7 +223,7 @@ def parse_affection(text: str, current: dict) -> dict:
 def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": system_prompt}] + api_messages,
             temperature=0.92,
             top_p=0.9,
@@ -287,26 +287,32 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
             raise e
 
 # ── 9. 텍스트 정제 & 색상 적용 ──────────────────────────────
+
 def clean_text(text: str) -> str:
-    return re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL).strip()
+    # 호감도 주석만 제거하고 줄바꿈은 보존합니다.
+    return re.sub(r'', '', text, flags=re.DOTALL).strip()
 
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
+    # 이름: "대사" 패턴을 찾아 설정된 색상을 입힙니다.
     for name, info in characters.items():
-        color = info["color"]
-        text  = re.sub(
-            rf'({re.escape(name)}:\s*"[^"]*")',
-            rf'<span style="color:{color}; font-weight:600">\1</span>',
-            text
-        )
+        color = info.get("color", "#000000")
+        # 정규식: 이름 뒤에 콜론과 따옴표가 오는 패턴을 찾음
+        pattern = rf'({re.escape(name)}:\s*"[^"]*")'
+        text = re.sub(pattern, rf'<span style="color:{color}; font-weight:600;">\1</span>', text)
     return text
 
 def render_message(text: str):
-    cleaned  = clean_text(text)
-    filtered = filter_foreign(cleaned)
-    colored  = colorize_dialogue(filtered)
+    # 1. 먼저 외국어를 필터링합니다.
+    filtered = filter_foreign(text)
+    # 2. 호감도 주석 등 불필요한 텍스트를 지웁니다.
+    cleaned = clean_text(filtered)
+    # 3. 캐릭터 이름을 찾아 색상을 입힙니다.
+    colored = colorize_dialogue(cleaned)
+    
+    # 최종 출력 (HTML 허용)
     st.markdown(colored, unsafe_allow_html=True)
-
+    
 # ── 10. 시스템 프롬프트 생성 ─────────────────────────────────
 def build_system_prompt() -> str:
     my            = st.session_state.my_name
