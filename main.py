@@ -250,9 +250,41 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
         else:
             raise e
 
-MAX_TURNS = 10
+MAX_TURNS = 5  # 기존 10에서 5로 축소 (토큰 절약)
+
 def get_trimmed_messages():
+    # 최신 5턴(유저+AI 총 10개 메시지)만 전송하여 할당량 소모를 방지합니다.
     return st.session_state.messages[-(MAX_TURNS * 2):]
+
+def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
+    try:
+        # 할당량이 넉넉한 8B 모델로 변경 (속도 향상 및 비용 절감)
+        completion = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant", 
+            messages=[{"role": "system", "content": system_prompt}] + api_messages,
+            temperature=0.9,
+            top_p=0.9,
+            max_tokens=800,
+        )
+        return completion.choices[0].message.content, "Groq"
+    except Exception as e:
+        # Groq 한도 초과 시 Gemini-Flash로 전환 (폴백)
+        if "429" in str(e) or "rate_limit" in str(e).lower():
+            try:
+                gemini_history = []
+                for msg in api_messages[:-1]:
+                    role = "user" if msg["role"] == "user" else "model"
+                    gemini_history.append({"role": role, "parts": [msg["content"]]})
+                
+                last_msg = api_messages[-1]["content"]
+                gemini_model = genai.GenerativeModel("gemini-2.0-flash", system_instruction=system_prompt)
+                chat = gemini_model.start_chat(history=gemini_history)
+                response = chat.send_message(last_msg)
+                return response.text, "Gemini"
+            except Exception as gemini_err:
+                raise Exception(f"모든 AI 모델의 할당량이 소진되었습니다: {gemini_err}")
+        else:
+            raise e
 
 # ── 9. 텍스트 정제 & 색상 적용 ──────────────────────────────
 def clean_text(text: str) -> str:
