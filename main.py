@@ -90,8 +90,7 @@ def generate_characters():
             "personality": p[0],
             "tone_hint":   p[1],
         }
-        
-    return characters
+
 # ── 4. 장르 / 수위 / 관계 설정 ──────────────────────────────
 GENRES = {
     "🏫 학원 로맨스":  "서열 1위가 지배하는 명문고. 남주는 속을 모르는 서늘한 재벌가 후계자, "
@@ -156,14 +155,10 @@ def load_game(user_id: str):
     return data[0] if data else None
 
 # ── 6. 외국어 필터 (화이트리스트 방식) ──────────────────────
+# 허용할 영문 약어 목록
 WHITELIST = {
-    "CEO", "CFO", "CTO", "COO", "HR", "PR", "IR", "PM", "PO",
-    "TV", "PC", "SNS", "IT", "AI", "VIP", "MC", "DJ",
-    "BGM", "OST", "CF", "PPT", "PDF", "USB", "WiFi", "GPS",
-    "MBTI", "MZ", "OTT", "DM", "ID", "OT", "MT", "CC", "TF",
-    "AS", "VS", "QA", "CS", "NDA", "OJT", "MOU", "FYI", "ASAP",
-    "KPI", "OKR", "ROI", "B2B", "B2C", "GPA", "ASMR", "TMI",
-    "LOL", "RPG", "FPS", "MVP", "GG", "SaaS", "ERP", "CRM",
+    "CEO", "CFO", "VIP", "AI", "OK", "TV", "PC",
+    "SNS", "IT", "MRI", "BGM", "OST", "MC", "DJ",
 }
 
 def filter_foreign(text: str) -> str:
@@ -177,7 +172,7 @@ def filter_foreign(text: str) -> str:
     for word in WHITELIST:
         text = re.sub(rf'\b{re.escape(word)}\b', preserve, text, flags=re.IGNORECASE)
 
-    # --- 초강력 외국어 제거 로직 ---
+    # --- 외국어 제거 로직 ---
     
     # 2. 일어(가타카나/히라가나), 한자, 기타 외국어 문자군 제거
     # [^\u0000-\u007F\uAC00-\uD7A3\u3130-\u318F\s\.,!\?\(\)":~] 
@@ -205,7 +200,13 @@ def filter_foreign(text: str) -> str:
     for i, p in enumerate(placeholders):
         text = text.replace(f"__PRESERVE_{i}__", p)
     return text
-    
+
+def render_message(text: str):
+    cleaned  = clean_text(text)      # 1. 호감도 주석 제거
+    filtered = filter_foreign(cleaned)  # 2. 외국어 제거
+    colored  = colorize_dialogue(filtered)  # 3. 색상 적용
+    st.markdown(colored, unsafe_allow_html=True)
+
 # ── 7. 호감도 파싱 (변화량 방식, ±5 제한) ───────────────────
 def parse_affection(text: str, current: dict) -> dict:
     updated    = current.copy()
@@ -223,9 +224,9 @@ def parse_affection(text: str, current: dict) -> dict:
 def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
     try:
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": system_prompt}] + api_messages,
-            temperature=0.92,
+            temperature=0.9,
             top_p=0.9,
             max_tokens=900,
         )
@@ -250,77 +251,32 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
         else:
             raise e
 
-MAX_TURNS = 5  # 기존 10에서 5로 축소 (토큰 절약)
+MAX_TURNS = 5
 
 def get_trimmed_messages():
-    # 최신 5턴(유저+AI 총 10개 메시지)만 전송하여 할당량 소모를 방지합니다.
     return st.session_state.messages[-(MAX_TURNS * 2):]
 
-def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
-    try:
-        # 할당량이 넉넉한 8B 모델로 변경 (속도 향상 및 비용 절감)
-        completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant", 
-            messages=[{"role": "system", "content": system_prompt}] + api_messages,
-            temperature=0.9,
-            top_p=0.9,
-            max_tokens=800,
-        )
-        return completion.choices[0].message.content, "Groq"
-    except Exception as e:
-        # Groq 한도 초과 시 Gemini-Flash로 전환 (폴백)
-        if "429" in str(e) or "rate_limit" in str(e).lower():
-            try:
-                gemini_history = []
-                for msg in api_messages[:-1]:
-                    role = "user" if msg["role"] == "user" else "model"
-                    gemini_history.append({"role": role, "parts": [msg["content"]]})
-                
-                last_msg = api_messages[-1]["content"]
-                gemini_model = genai.GenerativeModel("gemini-2.0-flash", system_instruction=system_prompt)
-                chat = gemini_model.start_chat(history=gemini_history)
-                response = chat.send_message(last_msg)
-                return response.text, "Gemini"
-            except Exception as gemini_err:
-                raise Exception(f"모든 AI 모델의 할당량이 소진되었습니다: {gemini_err}")
-        else:
-            raise e
-
 # ── 9. 텍스트 정제 & 색상 적용 ──────────────────────────────
+def clean_text(text: str) -> str:
+    return re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL).strip()
 
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
-    # 1. AI가 출력한 원본 텍스트에서 이름 부분을 찾습니다.
-    # 패턴: "이름: " 또는 "이름 :"
     for name, info in characters.items():
-        color = info.get("color", "#000000")
-        # 이름 뒤에 콜론이 붙은 대사 패턴을 정확히 매칭
-        pattern = rf'({re.escape(name)})\s*:\s*'
-        # 이름을 색상이 들어간 HTML 태그로 치환 (뒤의 대사는 건드리지 않음)
-        replacement = f'<span style="color:{color}; font-weight:bold;">\\1</span>: '
-        text = re.sub(pattern, replacement, text)
-    return text
-
-def clean_text(text: str) -> str:
-    # 같은 주석과 [장소] 같은 메타 정보를 깔끔히 정리합니다.
-    text = re.sub(r'', '', text, flags=re.DOTALL)
-    # 불필요한 빈 괄호나 잔여 문자 정리
-    text = text.replace('()', '').replace('[]', '').strip()
+        color = info["color"]
+        text  = re.sub(
+            rf'({re.escape(name)}:\s*"[^"]*")',
+            rf'<span style="color:{color}; font-weight:600">\1</span>',
+            text
+        )
     return text
 
 def render_message(text: str):
-    # 1. 외국어(일어/한자) 물리적 제거
-    filtered = filter_foreign(text)
-    
-    # 2. 색상 적용 (이름: "대사" 형식 유지 상태에서 실행)
-    colored = colorize_dialogue(filtered)
-    
-    # 3. 마지막으로 불필요한 주석 제거
-    final_text = clean_text(colored)
-    
-    # 4. 줄바꿈 보존을 위해 st.write 대신 st.markdown 사용
-    st.markdown(final_text.replace('\n', '  \n'), unsafe_allow_html=True)
-    
+    cleaned  = clean_text(text)
+    filtered = filter_foreign(cleaned)
+    colored  = colorize_dialogue(filtered)
+    st.markdown(colored, unsafe_allow_html=True)
+
 # ── 10. 시스템 프롬프트 생성 ─────────────────────────────────
 def build_system_prompt() -> str:
     my            = st.session_state.my_name
@@ -375,15 +331,10 @@ def build_system_prompt() -> str:
 ■ 등장인물
 {char_desc}
 {user_note_section}
-
 ■ 말투 절대 규칙 ★★★ 가장 중요 ★★★
 - 모든 등장인물은 반드시 반말을 사용한다. 예외 없음.
 - 절대 금지 말투: "~씨", "~군", "~입니다", "~죠?", "~이에요", "~하세요", "~군요"
 - 반드시 사용할 말투: "~야", "~아", "~해", "~어", "~잖아", "~거든", "~네"
-- 나쁜 예: "예진씨, 이곳은 쉽지 않습니다. 함께하면 더 쉬울 수도 있죠?"
-- 좋은 예: "이곳은 쉽지 않아. 함께하면 더 쉬울 수도 있어."
-- 나쁜 예: "정예진씨, 오늘 기분이 어떠세요?"
-- 좋은 예: "오늘 기분은 어때?"
 - 호감도와 무관하게 반말은 항상 유지된다.
 
 ■ 출력 형식 (반드시 준수)
@@ -404,31 +355,30 @@ def build_system_prompt() -> str:
 - 같은 단어·표현을 전체 응답에서 3회 이상 사용 금지
 - 특히 아래 표현은 응답 전체에서 최대 1회만 허용:
   '미소', '시선을 돌렸다', '바라보았다', '훑었다', '향했다'
-- 대체 표현:
+- 대체 표현 예시:
   미소 → 입꼬리를 올렸다 / 눈가가 부드러워졌다 / 피식 웃었다
   시선을 돌렸다 → 고개를 틀었다 / 눈길이 옮겨갔다 / 눈을 들었다
-- 인물 이름은 첫 등장 후 대명사(그, 그녀)로 대체
-- 대사 이름표가 있으면 서술에서 해당 이름 반복 금지
-- 나쁜 예: "차도진은 한유리를 향해 시선을 돌렸다. 차도진: '안녕.'"
-- 좋은 예: "그가 천천히 고개를 틀었다. 차도진: '안녕.'"
-- 한 문단 최대 3문장
+- 인물 이름은 첫 등장 후 대명사(그, 그녀, 그의)로 대체
+- 대사 이름표(차도진:)가 있으면 서술에서 해당 이름 반복 금지
+  나쁜 예: "차도진은 한유리를 향해 시선을 돌렸다. 차도진: '안녕하세요.'"
+  좋은 예: "그가 천천히 고개를 틀었다. 차도진: '안녕하세요.'"
 - 같은 장소 표현 반복 금지
+- 한 문단 최대 3문장. 너무 긴 서술 금지.
 
-# build_system_prompt 함수 내의 언어 규칙 섹션을 아래와 같이 강화하세요.
-
-■ ★★★ 언어 절대 규칙 (나레이션 포함 최우선) ★★★
+■ ★★★ 언어 절대 규칙 ★★★
 - 출력되는 모든 문장은 반드시 100% '자연스러운 한국어'여야 한다.
 - 한자(这样, 实际 등)나 영어, 일본어 등을 문장 중간에 섞어서 쓰는 행위를 절대 금지한다.
 - "한글(한자)" 또는 "한글(영어)" 같은 병기 방식은 무조건 탈락이다. 
 - 오직 한국어 단어만 사용하며, 외국어 개념이 필요하면 반드시 한국어 문맥으로 의역하라.
 - 영어 단어가 떠올라도 반드시 한국어로 바꿔서 출력해야 한다.
-- 예: "narrow해졌다" → "가늘어졌다" / "smile지었다" → "미소를 지었다"
+  예: "narrow해졌다" → "가늘어졌다" / "smile지었다" → "미소를 지었다"
 - 이 규칙을 어기면 출력 전체가 실패한 것으로 간주한다.
 - 화이트리스트 약어(CEO, SNS 등)만 예외적으로 허용한다.- 대사뿐만 아니라 '지문(나레이션)'에서도 100% 한국어만 사용한다.
 - 지문 도중 단어의 뜻을 풀이하거나 외국어를 병기하는 행위(예: "느꼈다(felt)")는 절대 금지다.
 - 한자(한문) 노출 시 즉시 실패로 간주한다.
 - 한국어 단어가 생각나지 않으면 가장 유사한 한국어 정서로 의역하라.
 - 이 규칙을 어기면 작가로서의 자격이 박탈된다고 간주하라.
+
 
 ■ /호감도 명령어
 사용자가 "/호감도" 입력 시에만 전체 캐릭터 호감도 표 출력
@@ -462,63 +412,54 @@ if "step" not in st.session_state:
     st.session_state.user_notes     = ""
 
 # ── 12. STEP 1: 로그인 ───────────────────────────────────────
-# ── 12. STEP 1: 로그인 ───────────────────────────────────────
 if st.session_state.step == "login":
-    st.title("📂 스토리 불러오기")
-    st.caption("이름과 비밀번호를 입력하여 여정을 이어가세요.")
-    
+    st.title("📖 당신의 이야기")
+    st.caption("나만의 웹소설을 시작하세요.")
+    st.divider()
+
+    name     = st.text_input("이름", placeholder="예: 종완")
+    password = st.text_input("비밀번호", type="password", placeholder="본인만 아는 비밀번호")
+
     col1, col2 = st.columns(2)
     with col1:
-        name = st.text_input("주인공 이름", key="login_name")
-    with col2:
-        password = st.text_input("비밀번호", type="password", key="login_pw")
-
-    st.write("")
-    c1, c2 = st.columns(2)
-    with c1:
         start = st.button("▶ 시작 / 이어하기", use_container_width=True)
-    with c2:
+    with col2:
         reset = st.button("🗑 처음부터 다시", use_container_width=True)
 
-    # 버튼이 눌렸을 때만 로직 실행 (NameError 방지)
     if (start or reset) and name and password:
         user_id = hashlib.sha256(f"{name}{password}".encode()).hexdigest()[:16]
         st.session_state.user_id = user_id
-        
+
         if reset:
-            # 기존 데이터 삭제 요청
-            requests.delete(f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}", headers=HEADERS)
+            requests.delete(
+                f"{SUPABASE_URL}/rest/v1/save_data?user_id=eq.{user_id}",
+                headers=HEADERS
+            )
             st.session_state.step = "setup"
-            st.rerun()
         else:
             saved = load_game(user_id)
             if saved:
-                # 저장된 데이터를 세션에 할당
-                st.session_state.my_name = saved["my_name"]
-                st.session_state.my_gender = saved.get("my_gender", "여성")
+                st.session_state.my_name        = saved["my_name"]
+                st.session_state.my_gender      = saved.get("my_gender", "여성")
                 st.session_state.my_personality = json.loads(saved["my_personality"])
-                st.session_state.my_intro = saved.get("my_intro", "")
-                st.session_state.genre = saved.get("genre", "")
-                st.session_state.rating = saved.get("rating", "💫 로맨스")
-                st.session_state.relation = saved.get("relation", "🤝 처음 만나는 사이")
-                st.session_state.messages = saved["messages"]
-                st.session_state.affection = saved["affection"]
-                st.session_state.turn_count = saved["turn_count"]
-                st.session_state.user_notes = saved.get("user_notes", "")
-                
+                st.session_state.my_intro       = saved.get("my_intro", "")
+                st.session_state.genre          = saved.get("genre", "")
+                st.session_state.rating         = saved.get("rating", "💫 로맨스")
+                st.session_state.relation       = saved.get("relation", "🤝 처음 만나는 사이")
+                st.session_state.messages       = saved["messages"]
+                st.session_state.affection      = saved["affection"]
+                st.session_state.turn_count     = saved["turn_count"]
+                st.session_state.user_notes     = saved.get("user_notes", "")
                 raw_chars = saved.get("char_name", "{}")
-                st.session_state.characters = json.loads(raw_chars) if isinstance(raw_chars, str) else raw_chars
-                
-                # 로드 완료 후 스토리로 이동
-                st.session_state.step = "story"
-                st.rerun()
+                st.session_state.characters     = json.loads(raw_chars) if isinstance(raw_chars, str) else raw_chars
+                st.session_state.step           = "story"
             else:
-                # 데이터가 없으면 설정 화면으로
                 st.session_state.step = "setup"
-                st.rerun()
+        st.rerun()
+
     elif (start or reset) and not (name and password):
-        st.warning("이름과 비밀번호를 모두 입력해주세요.")
-                
+        st.warning("이름과 비밀번호를 입력해주세요.")
+
 # ── 13. STEP 2: 주인공 설정 ──────────────────────────────────
 elif st.session_state.step == "setup":
     st.title("✍️ 주인공 설정")
