@@ -547,11 +547,9 @@ elif st.session_state.step == "relation":
             if st.button("선택", key=f"rel_{rel_name}", use_container_width=True):
                 st.session_state.relation  = rel_name
                 start_aff = rel_info["start_affection"]
-                chars = st.session_state.get("characters", {})
-if isinstance(chars, str): # 혹시 문자열로 들어있을 경우를 대비
-    import json
-    chars = json.loads(chars)
-st.session_state.affection = {name: start_aff for name in chars}
+                st.session_state.affection = {
+                    name: start_aff for name in st.session_state.characters
+                }
                 st.session_state.step = "intro"
                 st.rerun()
         st.divider()
