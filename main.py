@@ -66,23 +66,13 @@ PERSONALITY_POOL = [
 
 def generate_characters():
     characters = {}
-    
-    # 1. 성격 풀을 무작위로 섞어서 필요한 만큼 가져오기 (성격 중복 방지)
-    # CHAR_ROLES 개수만큼 중복 없이 성격을 선택합니다.
     selected_personalities = random.sample(PERSONALITY_POOL, len(CHAR_ROLES))
     
-    # 2. 각 역할(Role)별로 이름과 성격을 배정
     for i, role_info in enumerate(CHAR_ROLES):
         gender = role_info["gender"]
-        
-        # 해당 성별의 이름 중 아직 사용하지 않은 이름 필터링
-        # (이름 풀이 역할 개수보다 충분히 크다는 가정 하에 실행)
         available_names = [n for n in CHAR_NAME_POOL[gender] if n not in characters]
         name = random.choice(available_names)
-        
-        # 미리 뽑아둔 중복 없는 성격 할당
         p = selected_personalities[i]
-        
         characters[name] = {
             "role":        role_info["role"],
             "emoji":       role_info["emoji"],
@@ -90,6 +80,7 @@ def generate_characters():
             "personality": p[0],
             "tone_hint":   p[1],
         }
+    return characters  
 
 # ── 4. 장르 / 수위 / 관계 설정 ──────────────────────────────
 GENRES = {
