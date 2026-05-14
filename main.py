@@ -91,6 +91,8 @@ def generate_characters():
             "tone_hint":   p[1],
         }
 
+return characters
+
 # ── 4. 장르 / 수위 / 관계 설정 ──────────────────────────────
 GENRES = {
     "🏫 학원 로맨스":  "서열 1위가 지배하는 명문고. 남주는 속을 모르는 서늘한 재벌가 후계자, "
