@@ -546,7 +546,6 @@ elif st.session_state.step == "relation":
         st.divider()
 
 # ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
-# ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
 elif st.session_state.step == "intro":
     st.title("📖 등장인물")
     st.caption(f"{st.session_state.genre}  |  "
@@ -601,7 +600,6 @@ elif st.session_state.step == "story":
         for name, info in characters.items():
             with st.expander(f"■ {name} ({info['role']})"):
                 st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
-                st.caption(f"말투: {info['tone_hint']}")
         
         st.divider()
         
