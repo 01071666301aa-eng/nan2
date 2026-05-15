@@ -546,23 +546,21 @@ elif st.session_state.step == "relation":
         st.divider()
 
 # ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
+# ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
 elif st.session_state.step == "intro":
     st.title("📖 등장인물")
-    st.caption(
-        f"{st.session_state.genre}  |  "
-        f"{st.session_state.rating}  |  "
-        f"{st.session_state.relation}"
-    )
+    st.caption(f"{st.session_state.genre}  |  "
+               f"{st.session_state.rating}  |  "
+               f"{st.session_state.relation}")
     st.divider()
 
     for name, info in st.session_state.characters.items():
-        with st.expander(f"{info['emoji']} {name}"):
-            st.markdown(
-                f"<span style='color:{info['color']}'>{info['personality']}</span>",
-                unsafe_allow_html=True
-            )
-
+        with st.expander(f"{info['emoji']} {name} ({info['role']})"):
+            st.markdown(f"**성격:** <span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
+            st.caption(f"말투 힌트: {info['tone_hint']}")
+    
     st.divider()
+    
     if st.button("📖 이야기 시작하기", use_container_width=True):
         system_prompt = build_system_prompt()
         relation      = st.session_state.relation
@@ -601,13 +599,12 @@ elif st.session_state.step == "story":
 
         st.markdown("### 🎨 등장인물")
         for name, info in characters.items():
-            st.markdown(
-                f"<span style='color:{info['color']}'>■</span> **{name}** ({info['role']})",
-                unsafe_allow_html=True
-            )
-
+            with st.expander(f"■ {name} ({info['role']})"):
+                st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
+                st.caption(f"말투: {info['tone_hint']}")
+        
         st.divider()
-
+        
         st.markdown("### 📝 유저 노트")
         st.caption("이벤트, 성격 추가, 요청사항을 자유롭게 적어주세요. 저장 후 다음 장면부터 반영돼요.")
         user_notes_input = st.text_area(
