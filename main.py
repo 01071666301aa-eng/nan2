@@ -556,7 +556,6 @@ elif st.session_state.step == "intro":
     for name, info in st.session_state.characters.items():
         with st.expander(f"{info['emoji']} {name} ({info['role']})"):
             st.markdown(f"**성격:** <span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
-            st.caption(f"말투 힌트: {info['tone_hint']}")
     
     st.divider()
     
