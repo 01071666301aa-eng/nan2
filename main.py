@@ -563,6 +563,24 @@ elif st.session_state.step == "story":
         st.markdown("### 🎨 등장인물")
         for name, info in characters.items():
             with st.expander(f"■ {name} ({info['role']})"):
+                # 이미지 탐색
+                img_path = None
+                for ext in [".JPG", ".jpg", ".PNG", ".png", ".jpeg"]:
+                    p = f"images/{name}{ext}"
+                    if os.path.exists(p):
+                        img_path = p
+                        break
+
+                if img_path:
+                    st.image(img_path, use_container_width=True)
+                else:
+                    st.markdown(
+                        f"<div style='text-align:center;font-size:40px;"
+                        f"padding:16px;background:var(--color-background-secondary);"
+                        f"border-radius:8px'>{info['emoji']}</div>",
+                        unsafe_allow_html=True
+                    )
+            
                 st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
                 st.caption(f"말투: {info['tone_hint']}")
         st.divider()
