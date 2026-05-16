@@ -229,7 +229,7 @@ def get_ai_response(system_prompt: str, api_messages: list) -> tuple[str, str]:
                     gemini_history.append({"role":role,"parts":[msg["content"]]})
                 last_msg     = optimized[-1]["content"]
                 gemini_model = genai.GenerativeModel(
-                    "gemini-2.0-flash",
+                    "gemini-2.5-flash",
                     system_instruction=system_prompt
                 )
                 chat     = gemini_model.start_chat(history=gemini_history)
