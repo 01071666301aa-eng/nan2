@@ -479,6 +479,13 @@ elif st.session_state.step == "intro":
     st.caption(f"{st.session_state.genre}  |  {st.session_state.rating}  |  {st.session_state.relation}")
     st.divider()
 
+    for name, info in st.session_state.characters.items():
+        # st.expander를 적용하여 클릭 시에만 정보 노출
+        with st.expander(f"{info['emoji']} {name} ({info['role']})"):
+            st.markdown(f"**성격:** <span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
+    
+    st.divider()
+
     characters = st.session_state.characters
     cols = st.columns(3)
     for i, (name, info) in enumerate(characters.items()):
@@ -555,10 +562,9 @@ elif st.session_state.step == "story":
 
         st.markdown("### 🎨 등장인물")
         for name, info in characters.items():
-            st.markdown(
-                f"<span style='color:{info['color']}'>■</span> **{name}** ({info['role']})",
-                unsafe_allow_html=True
-            )
+            with st.expander(f"■ {name} ({info['role']})"):
+                st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
+                st.caption(f"말투: {info['tone_hint']}")
         st.divider()
 
         st.markdown("### 📝 유저 노트")
