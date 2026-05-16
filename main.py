@@ -250,7 +250,7 @@ def colorize_dialogue(text: str) -> str:
         color = info["color"]
         text = re.sub(rf'({re.escape(name)}:\s*["\'"\'"\'\'](.*?)["\'"\'"\'\'])',
                       rf'<br><span style="color:{color}; font-weight:600">\1</span><br>', text)
-                          text = re.sub(r'(["\'"\'"\'\']</span>)<br>\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
+		text = re.sub(r'(["\'"\'"\'\']</span>)<br>\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
     text = re.sub(r'(<br>\s*)+', '<br>', text)
     
     return text
