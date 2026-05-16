@@ -246,11 +246,17 @@ def clean_text(text: str) -> str:
 
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
+    
+    # 1단계: 이름: "대사" 패턴을 찾아 색상을 입히고 앞뒤로 줄바꿈을 넣습니다.
     for name, info in characters.items():
         color = info["color"]
         text = re.sub(rf'({re.escape(name)}:\s*["\'"\'"\'\'](.*?)["\'"\'"\'\'])',
                       rf'<br><span style="color:{color}; font-weight:600">\1</span><br>', text)
-		text = re.sub(r'(["\'"\'"\'\']</span>)<br>\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
+                      
+    # 2단계: 대사 종료 후 바로 붙어 나오는 행동 묘사(지문) 앞에 줄바꿈을 처리합니다.
+    text = re.sub(r'(["\'"\'"\'\']</span>)<br>\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
+    
+    # 3단계: 연속된 줄바꿈 중복 방지 및 정돈
     text = re.sub(r'(<br>\s*)+', '<br>', text)
     
     return text
