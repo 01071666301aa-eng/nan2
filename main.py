@@ -250,7 +250,7 @@ def colorize_dialogue(text: str) -> str:
         color = info["color"]
         text  = re.sub(
             rf'({re.escape(name)}:\s*["""\'](.*?)["""\'])',
-            rf'<span style="color:{color}; font-weight:600">\1</span>',
+            rf'<br><span style="color:{color}; font-weight:600">\1</span>',
             text
         )
     return text
@@ -310,7 +310,7 @@ def build_system_prompt() -> str:
 [출력형식]
 1. [장소-시간대]
 2. 소설체 서술(메타태그 금지)
-3. 대사: 이름: "대사" (앞뒤 빈줄)
+3. 대사: 이름: "대사" 형태로 작성하되, 다른 인물의 대사로 넘어갈 때는 반드시 두 번 줄바꿈(\\n\\n)을 하여 개별 문단으로 분리할 것. 절대 한 줄에 연달아 쓰지 말 것.
 4. 1~3명만 등장
 5. 마지막줄: <!-- [이름 +N] [이름 -N] --> (±5 이내, 본문노출금지)
 
