@@ -582,7 +582,6 @@ elif st.session_state.step == "story":
                     )
             
                 st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
-                st.caption(f"말투: {info['tone_hint']}")
         st.divider()
 
         st.markdown("### 📝 유저 노트")
