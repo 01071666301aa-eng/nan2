@@ -143,28 +143,11 @@ def filter_foreign(text: str) -> str:
     def preserve(m):
         placeholders.append(m.group(0))
         return f"__PRESERVE_{len(placeholders)-1}__"
-
-    # HTML 태그, 코드블록 보호
     text = re.sub(r'<[^>]+>|```[\s\S]*?```|`[^`]*`', preserve, text)
-
-    # 화이트리스트 단어 보호
     for word in WHITELIST:
         text = re.sub(rf'\b{re.escape(word)}\b', preserve, text, flags=re.IGNORECASE)
-
-    # --- 수정된 부분: 한자 및 괄호 안의 외국어 제거 ---
-    # 1. 한자 범위([\u4e00-\u9fff]) 제거
-    text = re.sub(r'[\u4e00-\u9fff]+', '', text)
-    
-    # 2. 괄호와 그 안의 영문/한자 제거 (예: (这样), (Action))
-    text = re.sub(r'\([A-Za-z\u4e00-\u9fff\s]+\)', '', text)
-
-    # 3. 나머지 영문 2자 이상 제거
-    text = re.sub(r'\b[A-Za-z]{2,}\b', '', text)
-    # ----------------------------------------------
-
-    text = re.sub(r'  +', ' ', text).strip()
-
-    # 보호 복원
+    text = re.sub(r'[A-Za-z]{2,}', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     for i, p in enumerate(placeholders):
         text = text.replace(f"__PRESERVE_{i}__", p)
     return text
@@ -577,36 +560,12 @@ elif st.session_state.step == "story":
         st.caption(f"📊 대화 {turn}턴 · 예상 {estimated:,} 토큰 사용")
         st.divider()
 
-       st.markdown("### 🎨 등장인물")
-for name, info in characters.items():
-    with st.expander(f"■ {name} ({info['role']})"):
-        # 이미지 탐색
-        img_path = None
-        for ext in [".JPG", ".jpg", ".PNG", ".png", ".jpeg"]:
-            p = f"images/{name}{ext}"
-            if os.path.exists(p):
-                img_path = p
-                break
-
-        if img_path:
-            st.image(img_path, use_container_width=True)
-        else:
-            st.markdown(
-                f"<div style='text-align:center;font-size:40px;"
-                f"padding:16px;background:var(--color-background-secondary);"
-                f"border-radius:8px'>{info['emoji']}</div>",
-                unsafe_allow_html=True
-            )
-
-        st.markdown(
-            f"<span style='color:{info['color']}'>{info['personality']}</span>",
-            unsafe_allow_html=True
-        )
-        st.caption(f"말투: {info['tone_hint']}")
-st.divider()
-
-
-
+        st.markdown("### 🎨 등장인물")
+        for name, info in characters.items():
+            with st.expander(f"■ {name} ({info['role']})"):
+                st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
+                st.caption(f"말투: {info['tone_hint']}")
+        st.divider()
 
         st.markdown("### 📝 유저 노트")
         st.caption("이벤트, 요청사항을 적어주세요. 저장 후 반영돼요.")
