@@ -605,6 +605,9 @@ for name, info in characters.items():
         st.caption(f"말투: {info['tone_hint']}")
 st.divider()
 
+
+
+
         st.markdown("### 📝 유저 노트")
         st.caption("이벤트, 요청사항을 적어주세요. 저장 후 반영돼요.")
         user_notes_input = st.text_area(
