@@ -246,15 +246,15 @@ def clean_text(text: str) -> str:
 
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
-    for name in characters:
-        text = re.sub(rf'(?<!<br>)(?<!\n)({re.escape(name)}:\s*["\'"\'"\'\'])', rf'<br>\1', text)
     for name, info in characters.items():
         color = info["color"]
         text = re.sub(rf'({re.escape(name)}:\s*["\'"\'"\'\'](.*?)["\'"\'"\'\'])',
-                      rf'<br><span style="color:{color}; font-weight:600">\1</span>', text)
-    text = re.sub(r'(["\'"\'"\'\'])\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
+                      rf'<br><span style="color:{color}; font-weight:600">\1</span><br>', text)
+                          text = re.sub(r'(["\'"\'"\'\']</span>)<br>\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text)
+    text = re.sub(r'(<br>\s*)+', '<br>', text)
     
     return text
+	
 def render_message(text: str):
     cleaned  = clean_text(text)
     filtered = filter_foreign(cleaned)
