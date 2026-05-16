@@ -143,11 +143,28 @@ def filter_foreign(text: str) -> str:
     def preserve(m):
         placeholders.append(m.group(0))
         return f"__PRESERVE_{len(placeholders)-1}__"
+
+    # HTML 태그, 코드블록 보호
     text = re.sub(r'<[^>]+>|```[\s\S]*?```|`[^`]*`', preserve, text)
+
+    # 화이트리스트 단어 보호
     for word in WHITELIST:
         text = re.sub(rf'\b{re.escape(word)}\b', preserve, text, flags=re.IGNORECASE)
-    text = re.sub(r'[A-Za-z]{2,}', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
+
+    # --- 수정된 부분: 한자 및 괄호 안의 외국어 제거 ---
+    # 1. 한자 범위([\u4e00-\u9fff]) 제거
+    text = re.sub(r'[\u4e00-\u9fff]+', '', text)
+    
+    # 2. 괄호와 그 안의 영문/한자 제거 (예: (这样), (Action))
+    text = re.sub(r'\([A-Za-z\u4e00-\u9fff\s]+\)', '', text)
+
+    # 3. 나머지 영문 2자 이상 제거
+    text = re.sub(r'\b[A-Za-z]{2,}\b', '', text)
+    # ----------------------------------------------
+
+    text = re.sub(r'  +', ' ', text).strip()
+
+    # 보호 복원
     for i, p in enumerate(placeholders):
         text = text.replace(f"__PRESERVE_{i}__", p)
     return text
