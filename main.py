@@ -246,6 +246,8 @@ def clean_text(text: str) -> str:
 
 def colorize_dialogue(text: str) -> str:
     characters = st.session_state.get("characters", {})
+	for name in characters:
+		text = re.sub(rf'(?<!<br>)(?<!\n)({re.escape(name)}:\s*["\'"\'"\'\'])', rf'<br>\1', text)
     for name, info in characters.items():
         color = info["color"]
         text  = re.sub(
@@ -253,6 +255,8 @@ def colorize_dialogue(text: str) -> str:
             rf'<br><span style="color:{color}; font-weight:600">\1</span>',
             text
         )
+		text = re.sub(r'(["\'"\'"\'\'])\s*([가-힣A-Za-z\(])', rf'\1<br>\2', text
+					 )
     return text
 
 def render_message(text: str):
