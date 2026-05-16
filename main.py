@@ -34,7 +34,6 @@ CHAR_NAME_POOL = {
     "여자": [
         "이하늘", "김서아", "박채원", "정유나", "한소희",
         "오지수", "윤하린", "최아라", "서민지", "강다은",
-        "류이나", "남예린", "송지안", "배수아", "임나연",
     ],
 }
 
@@ -546,19 +545,65 @@ elif st.session_state.step == "relation":
         st.divider()
 
 # ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
+# ── 17. STEP 6: 캐릭터 소개 ──────────────────────────────────
 elif st.session_state.step == "intro":
     st.title("📖 등장인물")
-    st.caption(f"{st.session_state.genre}  |  "
-               f"{st.session_state.rating}  |  "
-               f"{st.session_state.relation}")
+    st.caption(
+        f"{st.session_state.genre}  |  "
+        f"{st.session_state.rating}  |  "
+        f"{st.session_state.relation}"
+    )
     st.divider()
 
-    for name, info in st.session_state.characters.items():
-        with st.expander(f"{info['emoji']} {name} ({info['role']})"):
-            st.markdown(f"**성격:** <span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
-    
+    characters = st.session_state.characters
+
+    # 카드 그리드 (3열)
+    cols = st.columns(3)
+    for i, (name, info) in enumerate(characters.items()):
+        with cols[i % 3]:
+            # 이미지 경로 (.JPG 대문자 우선, 없으면 .jpg 시도)
+            img_path_jpg  = f"images/{name}.JPG"
+            img_path_lower = f"images/{name}.jpg"
+            img_path_png  = f"images/{name}.PNG"
+
+            # 카드 컨테이너
+            with st.container(border=True):
+                # 이미지
+                if os.path.exists(img_path_jpg):
+                    st.image(img_path_jpg, use_container_width=True)
+                elif os.path.exists(img_path_lower):
+                    st.image(img_path_lower, use_container_width=True)
+                elif os.path.exists(img_path_png):
+                    st.image(img_path_png, use_container_width=True)
+                else:
+                    st.markdown(
+                        f"<div style='text-align:center; font-size:64px; "
+                        f"padding:40px 0; background:var(--color-background-secondary); "
+                        f"border-radius:8px'>{info['emoji']}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                # 역할 배지
+                st.markdown(
+                    f"<span style='font-size:11px; font-weight:500; "
+                    f"padding:3px 8px; border-radius:99px; "
+                    f"background:{info['color']}22; color:{info['color']};'>"
+                    f"{info['role']}</span>",
+                    unsafe_allow_html=True
+                )
+
+                # 이름
+                st.markdown(
+                    f"<p style='font-size:16px; font-weight:500; "
+                    f"margin:6px 0 4px; color:var(--color-text-primary)'>"
+                    f"<span style='color:{info['color']}'>■</span> {name}</p>",
+                    unsafe_allow_html=True
+                )
+
+                # 성격 설명
+                st.caption(info["personality"])
+
     st.divider()
-    
     if st.button("📖 이야기 시작하기", use_container_width=True):
         system_prompt = build_system_prompt()
         relation      = st.session_state.relation
@@ -597,11 +642,13 @@ elif st.session_state.step == "story":
 
         st.markdown("### 🎨 등장인물")
         for name, info in characters.items():
-            with st.expander(f"■ {name} ({info['role']})"):
-                st.markdown(f"<span style='color:{info['color']}'>{info['personality']}</span>", unsafe_allow_html=True)
-        
+            st.markdown(
+                f"<span style='color:{info['color']}'>■</span> **{name}** ({info['role']})",
+                unsafe_allow_html=True
+            )
+
         st.divider()
-        
+
         st.markdown("### 📝 유저 노트")
         st.caption("이벤트, 성격 추가, 요청사항을 자유롭게 적어주세요. 저장 후 다음 장면부터 반영돼요.")
         user_notes_input = st.text_area(
